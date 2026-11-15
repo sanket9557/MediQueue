@@ -1,0 +1,21 @@
+# Build Command: npm install && npm run build
+# Start Command: npm start
+# Root Directory: server
+services:
+  - type: web
+    name: mediqueue-backend
+    env: node
+    region: ohio
+    rootDir: server
+    buildCommand: "npm install && npm run build"
+    startCommand: "npm start"
+    numInstances: 1
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 5000
+      - key: MONGODB_URI
+        sync: false
+      - key: JWT_SECRET
+        sync: false
