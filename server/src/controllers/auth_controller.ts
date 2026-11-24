@@ -5,27 +5,40 @@ import jwt from "jsonwebtoken";
 import { UserModel } from "../models/user_model";
 import { UserRole } from "../types/system.types";
 
-const JWT_SECRET = process.env.JWT_SECRET || "default_jwt_secret_mediqueue_2026";
+// JWT secret must be configured in environment variables.
+const JWT_SECRET = process.env.JWT_SECRET;
+
+if (!JWT_SECRET) {
+  throw new Error("JWT_SECRET is not configured");
+}
+
 const TOKEN_EXPIRATION = "24h";
 
-export const register = async (req: Request, res: Response): Promise<void> => {
+export const register = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
   try {
     const { name, email, password, phone } = req.body;
 
     if (!name || !email || !password || !phone) {
-      res.status(400).json({ message: "Please provide all required fields." });
+      res.status(400).json({
+        message: "Please provide all required fields.",
+      });
       return;
     }
 
     // Email validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
-      res.status(400).json({ message: "Please provide a valid email address." });
+      res.status(400).json({
+        message: "Please provide a valid email address.",
+      });
       return;
     }
 
     // Password validation
-    if (password.length < 6) {
+    if (typeof password !== "string" || password.length < 6) {
       res.status(400).json({
         message: "Password must be at least 6 characters long.",
       });
@@ -42,7 +55,7 @@ export const register = async (req: Request, res: Response): Promise<void> => {
     }
 
     // Public registration always creates a PATIENT account.
-    // Admin and Doctor roles cannot be assigned through public registration.
+    // Admin and Doctor roles cannot be assigned publicly.
     const requestedRole = UserRole.PATIENT;
 
     const existingUser = await UserModel.findOne({ email });
@@ -57,17 +70,15 @@ export const register = async (req: Request, res: Response): Promise<void> => {
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(password, salt);
 
-    const newUserPayload = {
+    const user = await UserModel.create({
       name,
       email,
       phone,
       passwordHash,
       role: requestedRole,
-    };
+    });
 
-    const user = await UserModel.create(newUserPayload);
-
-    // Filter out password from response
+    // Do not return the password hash.
     const userToReturn = {
       id: user._id,
       name: user.name,
@@ -89,11 +100,16 @@ export const register = async (req: Request, res: Response): Promise<void> => {
     });
   } catch (error: any) {
     console.error("Register error:", error);
-    res.status(500).json({ message: "Internal server error" });
+    res.status(500).json({
+      message: "Internal server error",
+    });
   }
 };
 
-export const login = async (req: Request, res: Response): Promise<void> => {
+export const login = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
   try {
     const { email, password, role } = req.body;
 
@@ -104,10 +120,14 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    const user = await UserModel.findOne({ email }).select("+passwordHash");
+    const user = await UserModel.findOne({ email }).select(
+      "+passwordHash"
+    );
 
     if (!user) {
-      res.status(401).json({ message: "Invalid credentials." });
+      res.status(401).json({
+        message: "Invalid credentials.",
+      });
       return;
     }
 
@@ -118,7 +138,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    // Verify the selected login role against the actual database role
+    // Verify selected login role against the database role.
     if (role && user.role !== role.toUpperCase()) {
       res.status(401).json({
         message: `No ${role} account found with that email.`,
@@ -132,7 +152,9 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     );
 
     if (!isMatch) {
-      res.status(401).json({ message: "Invalid credentials." });
+      res.status(401).json({
+        message: "Invalid credentials.",
+      });
       return;
     }
 
@@ -157,14 +179,21 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     });
   } catch (error: any) {
     console.error("Login error:", error);
-    res.status(500).json({ message: "Internal server error" });
+    res.status(500).json({
+      message: "Internal server error",
+    });
   }
 };
 
-export const getMe = async (req: any, res: Response): Promise<void> => {
+export const getMe = async (
+  req: any,
+  res: Response
+): Promise<void> => {
   try {
     if (!req.user || !req.user._id) {
-      res.status(401).json({ message: "Unauthorized" });
+      res.status(401).json({
+        message: "Unauthorized",
+      });
       return;
     }
 
@@ -173,7 +202,9 @@ export const getMe = async (req: any, res: Response): Promise<void> => {
     );
 
     if (!user) {
-      res.status(404).json({ message: "User not found" });
+      res.status(404).json({
+        message: "User not found",
+      });
       return;
     }
 
@@ -186,6 +217,8 @@ export const getMe = async (req: any, res: Response): Promise<void> => {
     });
   } catch (error: any) {
     console.error("getMe error:", error);
-    res.status(500).json({ message: "Internal server error" });
+    res.status(500).json({
+      message: "Internal server error",
+    });
   }
 };
