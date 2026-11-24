@@ -1,3 +1,4 @@
+
 import { Request, Response } from "express";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
@@ -9,7 +10,7 @@ const TOKEN_EXPIRATION = "24h";
 
 export const register = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { name, email, password, phone, role, specialty } = req.body;
+    const { name, email, password, phone } = req.body;
 
     if (!name || !email || !password || !phone) {
       res.status(400).json({ message: "Please provide all required fields." });
@@ -23,31 +24,40 @@ export const register = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    // Password validation (min 6 characters)
+    // Password validation
     if (password.length < 6) {
-      res.status(400).json({ message: "Password must be at least 6 characters long." });
+      res.status(400).json({
+        message: "Password must be at least 6 characters long.",
+      });
       return;
     }
 
-    // Phone number validation (exactly 10 digits)
+    // Phone number validation
     const phoneRegex = /^\d{10}$/;
     if (!phoneRegex.test(phone)) {
-      res.status(400).json({ message: "Phone number must be exactly 10 digits." });
+      res.status(400).json({
+        message: "Phone number must be exactly 10 digits.",
+      });
       return;
     }
 
-    const requestedRole = (role ? role.toUpperCase() : UserRole.PATIENT) as UserRole;
+    // Public registration always creates a PATIENT account.
+    // Admin and Doctor roles cannot be assigned through public registration.
+    const requestedRole = UserRole.PATIENT;
 
     const existingUser = await UserModel.findOne({ email });
+
     if (existingUser) {
-      res.status(409).json({ message: "An account with this email already exists." });
+      res.status(409).json({
+        message: "An account with this email already exists.",
+      });
       return;
     }
 
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(password, salt);
 
-    const newUserPayload: any = {
+    const newUserPayload = {
       name,
       email,
       phone,
@@ -55,13 +65,9 @@ export const register = async (req: Request, res: Response): Promise<void> => {
       role: requestedRole,
     };
 
-    if (requestedRole === UserRole.DOCTOR && specialty) {
-      newUserPayload.specialization = specialty;
-    }
-
     const user = await UserModel.create(newUserPayload);
 
-    // Filter out password from the response object
+    // Filter out password from response
     const userToReturn = {
       id: user._id,
       name: user.name,
@@ -70,9 +76,11 @@ export const register = async (req: Request, res: Response): Promise<void> => {
       specialty: user.specialization,
     };
 
-    const token = jwt.sign({ id: user._id, role: user.role }, JWT_SECRET, {
-      expiresIn: TOKEN_EXPIRATION,
-    });
+    const token = jwt.sign(
+      { id: user._id, role: user.role },
+      JWT_SECRET,
+      { expiresIn: TOKEN_EXPIRATION }
+    );
 
     res.status(201).json({
       message: "User registered successfully",
@@ -90,11 +98,12 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     const { email, password, role } = req.body;
 
     if (!email || !password) {
-      res.status(400).json({ message: "Email and password are required." });
+      res.status(400).json({
+        message: "Email and password are required.",
+      });
       return;
     }
 
-    // Explicitly select passwordHash as it's modeled as select: false
     const user = await UserModel.findOne({ email }).select("+passwordHash");
 
     if (!user) {
@@ -103,25 +112,35 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     }
 
     if (!user.isActive) {
-      res.status(403).json({ message: "Your account has been deactivated." });
+      res.status(403).json({
+        message: "Your account has been deactivated.",
+      });
       return;
     }
 
-    // Enforce role check from login UI 
+    // Verify the selected login role against the actual database role
     if (role && user.role !== role.toUpperCase()) {
-      res.status(401).json({ message: `No ${role} account found with that email.` });
+      res.status(401).json({
+        message: `No ${role} account found with that email.`,
+      });
       return;
     }
 
-    const isMatch = await bcrypt.compare(password, user.passwordHash || "");
+    const isMatch = await bcrypt.compare(
+      password,
+      user.passwordHash || ""
+    );
+
     if (!isMatch) {
       res.status(401).json({ message: "Invalid credentials." });
       return;
     }
 
-    const token = jwt.sign({ id: user._id, role: user.role }, JWT_SECRET, {
-      expiresIn: TOKEN_EXPIRATION,
-    });
+    const token = jwt.sign(
+      { id: user._id, role: user.role },
+      JWT_SECRET,
+      { expiresIn: TOKEN_EXPIRATION }
+    );
 
     const userToReturn = {
       id: user._id,
@@ -149,7 +168,10 @@ export const getMe = async (req: any, res: Response): Promise<void> => {
       return;
     }
 
-    const user = await UserModel.findById(req.user._id).select("-passwordHash");
+    const user = await UserModel.findById(req.user._id).select(
+      "-passwordHash"
+    );
+
     if (!user) {
       res.status(404).json({ message: "User not found" });
       return;
